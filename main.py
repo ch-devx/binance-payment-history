@@ -8,10 +8,9 @@ Ingresos considerados:
 
 Egresos considerados:
   - Pagos enviados via Binance Pay   → /sapi/v1/pay/transactions  (amount < 0)
-  - Retiros BEP20 realizados         → /sapi/v1/capital/withdraw/history (network=BSC)
 
-Solo se contabilizan USDC y USDT, desde el 1 de octubre de 2025.
-Las claves de API se leen desde un archivo .env en el mismo directorio.
+Solo se contabilizan USDC y USDT, desde el 1 de diciembre de 2025.
+Las claves de API y exclusiones se leen desde un archivo .env en el mismo directorio.
 
 Dependencias: pip install requests python-dotenv
 """
@@ -35,16 +34,17 @@ API_SECRET = os.getenv("API_SECRET")
 
 if not API_KEY or not API_SECRET:
     raise SystemExit(
-        "Error: No se encontraron BINANCE_API_KEY y/o BINANCE_API_SECRET en el archivo .env"
+        "Error: No se encontraron API_KEY y/o API_SECRET en el archivo .env"
     )
 
+# IDs de Binance a excluir (pagos personales no relacionados al negocio).
+# En el .env: EXCLUDED_IDS=123456789,987654321
+_raw_excluded = os.getenv("EXCLUDED_IDS", "")
+EXCLUDED_IDS = {uid.strip() for uid in _raw_excluded.split(",") if uid.strip()}
+
 BASE_URL = "https://api.binance.com"
-
-# Solo estas monedas se contabilizan
 STABLECOINS = {"USDC", "USDT"}
-
-# Fecha de inicio
-START_DT = datetime(2025, 10, 1, tzinfo=timezone.utc)
+START_DT = datetime(2025, 12, 1, tzinfo=timezone.utc)
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -63,16 +63,40 @@ def api_get(endpoint: str, params: dict) -> dict | list:
 
 
 def iter_windows():
-    """Genera pares (start_ms, end_ms) en ventanas de 90 dias desde START_DT hasta hoy."""
+    """
+    Genera ventanas mensuales exactas desde START_DT hasta hoy.
+    Cada ventana va del dia 1 al ultimo dia del mes (28/29/30/31).
+    """
+    import calendar
+
     end_dt = datetime.now(timezone.utc)
     cursor = START_DT
-    window = timedelta(days=90)
     while cursor < end_dt:
-        win_end = min(cursor + window, end_dt)
+        year, month = cursor.year, cursor.month
+        last_day = calendar.monthrange(year, month)[1]
+        win_end = min(
+            datetime(year, month, last_day, 23, 59, 59, tzinfo=timezone.utc), end_dt
+        )
         yield int(cursor.timestamp() * 1000), int(
             win_end.timestamp() * 1000
         ), cursor, win_end
-        cursor = win_end
+        # Avanzar al primer dia del mes siguiente
+        if month == 12:
+            cursor = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            cursor = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+
+
+def is_excluded(tx: dict) -> bool:
+    """
+    Devuelve True si el binanceId del pagador o receptor
+    está en la lista de exclusiones.
+    """
+    if not EXCLUDED_IDS:
+        return False
+    payer_id = str(tx.get("payerInfo", {}).get("binanceId", ""))
+    receiver_id = str(tx.get("receiverInfo", {}).get("binanceId", ""))
+    return payer_id in EXCLUDED_IDS or receiver_id in EXCLUDED_IDS
 
 
 # ─── BINANCE PAY ──────────────────────────────────────────────────────────────
@@ -80,9 +104,8 @@ def iter_windows():
 
 def fetch_all_pay() -> list:
     """
-    Devuelve TODAS las transacciones Pay (recibidas y enviadas) en stablecoins.
-    amount > 0 → recibido, amount < 0 → enviado.
-    walletType = 1 → funding wallet (donde cae Binance Pay).
+    Devuelve todas las transacciones Pay en stablecoins (funding wallet).
+    amount > 0 = recibido, amount < 0 = enviado.
     """
     all_tx = []
     for start_ms, end_ms, cursor, win_end in iter_windows():
@@ -101,7 +124,6 @@ def fetch_all_pay() -> list:
         if isinstance(body, dict) and body.get("code") != "000000":
             raise RuntimeError(f"Error Pay API: {body}")
         txs = body.get("data", []) if isinstance(body, dict) else []
-        # Filtrar: solo funding wallet y stablecoins
         filtradas = [
             tx
             for tx in txs
@@ -116,9 +138,7 @@ def fetch_all_pay() -> list:
 
 
 def fetch_all_deposits() -> list:
-    """
-    Depositos BEP20 completados (status=1) en stablecoins.
-    """
+    """Depositos BEP20 completados (status=1) en stablecoins."""
     all_dep = []
     for start_ms, end_ms, cursor, win_end in iter_windows():
         print(
@@ -139,36 +159,6 @@ def fetch_all_deposits() -> list:
         print(f"{len(deps)} totales, {len(filtradas)} stablecoins")
         all_dep.extend(filtradas)
     return all_dep
-
-
-# ─── RETIROS BEP20 ───────────────────────────────────────────────────────────
-
-
-def fetch_all_withdrawals() -> list:
-    """
-    Retiros BEP20 completados (status=6) en stablecoins.
-    status=6 = completed segun la API de Binance.
-    """
-    all_wd = []
-    for start_ms, end_ms, cursor, win_end in iter_windows():
-        print(
-            f"  [BEP20 retiro]   {cursor.strftime('%Y-%m-%d')} -> {win_end.strftime('%Y-%m-%d')} ...",
-            end=" ",
-        )
-        wds = api_get(
-            "/sapi/v1/capital/withdraw/history",
-            {
-                "network": "BSC",
-                "status": 6,
-                "startTime": start_ms,
-                "endTime": end_ms,
-                "limit": 1000,
-            },
-        )
-        filtradas = [w for w in wds if w.get("coin") in STABLECOINS]
-        print(f"{len(wds)} totales, {len(filtradas)} stablecoins")
-        all_wd.extend(filtradas)
-    return all_wd
 
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -197,37 +187,78 @@ def fmt_row(fecha_dt, tipo, moneda, monto, signo="+"):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Balance neto USDC/USDT: Pay + BEP20 (desde oct 2025)"
+        description="Balance neto USDC/USDT: Pay + BEP20 (desde dic 2025)"
     )
     parser.add_argument(
         "--pay-tipo",
         default="ALL",
-        help="Filtrar Pay por orderType: C2C, PAY, CRYPTO_BOX, ALL (default: ALL)",
+        help="Filtrar Pay por orderType: C2C, PAY, ALL (default: ALL)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Imprime el JSON crudo de las transacciones Pay para inspeccionar campos",
+    )
+    parser.add_argument(
+        "--debug-limit",
+        type=int,
+        default=5,
+        metavar="N",
+        help="Numero de transacciones a mostrar en modo --debug (default: 5)",
     )
     args = parser.parse_args()
 
+    # ── MODO DEBUG ────────────────────────────────────────────────────────────
+    if args.debug:
+        import json
+
+        print(f"\n{'='*62}")
+        print(
+            f"  MODO DEBUG — primeras {args.debug_limit} transacciones Pay (JSON crudo)"
+        )
+        print(f"{'='*62}\n")
+        print("Consultando Binance Pay...")
+        pay_txs = fetch_all_pay()
+        muestra = pay_txs[: args.debug_limit]
+        if not muestra:
+            print("  No se encontraron transacciones Pay.")
+        for i, tx in enumerate(muestra, 1):
+            print(f"\n  ── Transaccion #{i} ──────────────────────────────────")
+            print(json.dumps(tx, indent=4, ensure_ascii=False))
+        print(f"\n{'='*62}")
+        print(f"  Total transacciones Pay encontradas: {len(pay_txs)}")
+        print(f"  (mostrando {len(muestra)} de {len(pay_txs)})")
+        print(f"{'='*62}\n")
+        return
+
+    # ── MODO NORMAL ───────────────────────────────────────────────────────────
     print(f"\n{'='*62}")
     print("  BINANCE - Balance neto stablecoins (USDC + USDT)")
     print(f"  Desde: {START_DT.strftime('%Y-%m-%d')} hasta hoy")
+    if EXCLUDED_IDS:
+        print(f"  IDs excluidos: {len(EXCLUDED_IDS)}")
     print(f"{'='*62}\n")
 
-    # Estructuras para almacenar movimientos normalizados
-    # { fecha_dt, tipo, moneda, monto (siempre positivo), fuente, direccion: 'ingreso'|'egreso' }
     ingresos = []
     egresos = []
 
-    # ── 1. Binance Pay (recibidos y enviados) ──────────────────────────────────
+    # ── 1. Binance Pay ────────────────────────────────────────────────────────
     print("Consultando Binance Pay...")
     pay_txs = fetch_all_pay()
 
+    excluidas_pay = 0
     for tx in pay_txs:
         amount = float(tx.get("amount", 0))
         order_type = tx.get("orderType", "")
+
         if args.pay_tipo != "ALL" and order_type != args.pay_tipo:
             continue
         if amount == 0:
             continue
         if order_type == "CRYPTO_BOX":
+            continue
+        if is_excluded(tx):
+            excluidas_pay += 1
             continue
 
         fecha_dt = parse_ts(tx["transactionTime"])
@@ -243,7 +274,10 @@ def main():
         else:
             egresos.append(registro)
 
-    # ── 2. Depositos BEP20 (ingresos) ─────────────────────────────────────────
+    if excluidas_pay:
+        print(f"  ({excluidas_pay} transacciones Pay omitidas por exclusion de ID)")
+
+    # ── 2. Depositos BEP20 ────────────────────────────────────────────────────
     print("\nConsultando depositos BEP20...")
     for dep in fetch_all_deposits():
         amount = float(dep.get("amount", 0))
@@ -259,22 +293,9 @@ def main():
             }
         )
 
-    # ── 3. Retiros BEP20 (egresos) ────────────────────────────────────────────
-    print("\nConsultando retiros BEP20...")
-    for wd in fetch_all_withdrawals():
-        # amount en retiros NO incluye la fee; transactionFee es la comision
-        amount = float(wd.get("amount", 0))
-        if amount <= 0:
-            continue
-        egresos.append(
-            {
-                "fecha_dt": parse_ts(wd.get("applyTime", wd.get("completeTime", 0))),
-                "tipo": "Retiro/BEP20",
-                "moneda": wd.get("coin"),
-                "monto": amount,
-                "fuente": "BEP20",
-            }
-        )
+    if not ingresos and not egresos:
+        print("\n  No se encontraron movimientos con esos filtros.")
+        return
 
     # ── Ordenar ───────────────────────────────────────────────────────────────
     ingresos.sort(key=lambda x: x["fecha_dt"])
@@ -299,7 +320,7 @@ def main():
         for eg in egresos:
             print(fmt_row(eg["fecha_dt"], eg["tipo"], eg["moneda"], eg["monto"], "-"))
 
-    # ── Agrupar por mes ───────────────────────────────────────────────────────
+    # ── Balance mensual ───────────────────────────────────────────────────────
     mes_ing = defaultdict(float)
     mes_eg = defaultdict(float)
 
