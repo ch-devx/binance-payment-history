@@ -55,10 +55,12 @@ def sign(params: dict) -> str:
 
 def api_get(endpoint: str, params: dict) -> dict | list:
     params["timestamp"] = int(time.time() * 1000)
+    params["recvWindow"] = 10000
     params["signature"] = sign(params)
     headers = {"X-MBX-APIKEY": API_KEY}
     r = requests.get(BASE_URL + endpoint, params=params, headers=headers, timeout=10)
-    r.raise_for_status()
+    if not r.ok:
+        raise RuntimeError(f"HTTP {r.status_code} en {endpoint}: {r.text}")
     return r.json()
 
 
