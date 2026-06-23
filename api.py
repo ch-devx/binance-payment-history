@@ -152,6 +152,10 @@ def fetch_all_deposits() -> list[dict]:
                 "limit": 1000,
             },
         )
+        if isinstance(deposits, dict) and deposits.get("code") != "000000":
+            raise RuntimeError(f"Deposit API error: {deposits}")
+        if not isinstance(deposits, list):
+            raise RuntimeError(f"Unexpected deposit response type: {type(deposits)} — {deposits}")
         filtered = [d for d in deposits if is_valid_deposit(d)]
         print(f"{len(deposits)} total, {len(filtered)} stablecoins")
         all_deposits.extend(filtered)
