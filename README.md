@@ -58,7 +58,7 @@ binance-pay-history/
 ## Installation
 
 ```bash
-git clone https://github.com/your-username/binance-pay-history.git
+git clone https://github.com/ch-devx/binance-pay-history
 cd binance-pay-history
 python -m venv .venv
 ```
