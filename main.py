@@ -26,6 +26,7 @@ from urllib.parse import urlencode
 import requests
 from dotenv import load_dotenv
 import os
+import calendar
 
 # ─── CARGAR VARIABLES DE ENTORNO ──────────────────────────────────────────────
 load_dotenv()
@@ -69,7 +70,6 @@ def iter_windows():
     Genera ventanas mensuales exactas desde START_DT hasta hoy.
     Cada ventana va del dia 1 al ultimo dia del mes (28/29/30/31).
     """
-    import calendar
 
     end_dt = datetime.now(timezone.utc)
     cursor = START_DT
