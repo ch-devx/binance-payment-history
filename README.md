@@ -26,8 +26,6 @@ Built to solve a practical accounting problem: Binance's own interface doesn't o
   USD value accurately.
 - **Funding wallet only** — Pay transactions are fetched from `walletType=1`
   (funding wallet). Spot or futures wallets are not included.
-- **BEP20 deposits only** — only BSC on-chain deposits are tracked.
-  Withdrawals are intentionally excluded (outflows via Pay are already captured).
 - **100-result cap per window** — the Pay API returns at most 100 results per
   monthly window. The tool warns when this limit is reached, but does not
   sub-paginate within a window. Very high-volume months may be incomplete.
