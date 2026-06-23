@@ -1,52 +1,85 @@
-# Binance Pay History — Net Stablecoin Balance
+# binance-pay-history
 
-A command-line script that calculates the net balance of payments received and sent via **Binance Pay**, also including **deposits received through the BEP20 network (BSC)**. Only accounts for **USDC** and **USDT**, starting from **December 1, 2025**.
+A lightweight CLI tool that calculates a net stablecoin balance across **Binance Pay transactions** and **BEP20 on-chain deposits**, producing a clean chronological report with monthly breakdowns.
 
-## What it does
+Built to solve a practical accounting problem: Binance's own interface doesn't offer a unified view of Pay + on-chain inflows in one place, and its API caps results at 100 per call — silently dropping older data if you query naively.
 
-- Queries the `/sapi/v1/pay/transactions` endpoint to fetch all C2C payments received and sent via Binance Pay.
-- Queries `/sapi/v1/capital/deposit/hisrec` to include on-chain deposits received through the BEP20 network.
-- Automatically filters:
-  - Only **USDC** and **USDT** currencies.
-  - Only movements from the **funding wallet**.
-  - Excludes `CRYPTO_BOX` transactions (red envelopes / rewards).
-  - Allows manually excluding transactions from specific Binance IDs (e.g. payments from friends or contacts unrelated to the business).
-- Generates a report with:
-  - Chronological breakdown of income and expenses.
-  - Monthly balance (income, expenses, and net per month).
-  - Full historical balance.
+---
+
+## Features
+
+- Fetches all **Binance Pay** C2C/P2P transactions (sent and received) from the funding wallet
+- Fetches all **BEP20 network deposits** (BSC) confirmed on-chain
+- Tracks **USDC and USDT** only — ignores spot, futures, and other assets
+- Handles **API pagination** by splitting the date range into exact monthly windows, preventing silent data loss
+- Warns when a window hits the 100-result cap
+- Supports **ID-based exclusion** to filter out personal or non-business payments
+- Outputs a detailed transaction table + monthly balance summary to the terminal
+
+---
+
+## How it works
+
+Binance's Pay API returns at most 100 results per request. Rather than paginating by offset (which the API doesn't support), this tool splits the full date range into **monthly windows** and queries each independently. This guarantees full coverage even for high-volume months.
+
+```
+Dec 2025  →  [start_ms .. end_ms]  →  fetch  →  filter  →  accumulate
+Jan 2026  →  [start_ms .. end_ms]  →  fetch  →  filter  →  accumulate
+...
+```
+
+Each window result is filtered immediately (`filters.py`) before being accumulated — keeping memory usage low and logic separated from the HTTP layer.
+
+---
+
+## Project structure
+
+```
+binance-pay-history/
+├── main.py          # CLI entry point and orchestration
+├── api.py           # Binance API layer: signing, requests, pagination
+├── filters.py       # Constants and filtering predicates
+├── report.py        # Terminal output: tables and monthly summary
+├── requirements.txt
+├── .env             # Credentials — not versioned
+├── .gitignore
+└── run.sh           # Linux/macOS launcher
+```
+
+---
 
 ## Requirements
 
 - Python 3.10+
-- A Binance API Key with read permissions (no trading or withdrawal permissions required).
+- A Binance API key with **read-only** permissions (no trading or withdrawal access needed)
+
+---
 
 ## Installation
 
-1. Clone or download this repository.
-2. Create a virtual environment and install dependencies:
+```bash
+git clone https://github.com/your-username/binance-pay-history.git
+cd binance-pay-history
+python -m venv .venv
+```
 
-   ```bash
-   python -m venv .venv
-   ```
+**Linux / macOS:**
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-   **Windows:**
-   ```bat
-   .venv\Scripts\activate.bat
-   pip install -r requirements.txt
-   ```
+**Windows:**
+```bat
+.venv\Scripts\activate.bat
+pip install -r requirements.txt
+```
 
-   **Linux / macOS:**
-   ```bash
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
+---
 
-3. Create a `.env` file in the project root (see next section).
+## Configuration
 
-## Configuration (`.env`)
-
-Create a `.env` file in the same directory as `main.py`:
+Create a `.env` file in the project root:
 
 ```env
 API_KEY=your_binance_api_key
@@ -56,78 +89,53 @@ EXCLUDED_IDS=123456789,987654321
 
 | Variable | Required | Description |
 |---|---|---|
-| `API_KEY` | Yes | API Key generated on Binance (read-only). |
-| `API_SECRET` | Yes | Corresponding API Secret. |
-| `EXCLUDED_IDS` | No | Comma-separated list of `binanceId` values to exclude from the calculation (e.g. payments from friends or personal contacts). |
+| `API_KEY` | Yes | Binance API key (read-only). |
+| `API_SECRET` | Yes | Corresponding API secret. |
+| `EXCLUDED_IDS` | No | Comma-separated list of `binanceId` values to exclude (e.g. personal contacts unrelated to business). |
 
-> ⚠️ The `.env` file should never be committed to a repository. It is already included in `.gitignore`.
+> The `.env` file is included in `.gitignore` and should never be committed.
+
+---
 
 ## Usage
-
-### Windows
-
-Double-click `run.bat`, or from a terminal:
-
-```bat
-.venv\Scripts\python.exe main.py
-```
-
-### Linux / macOS
-
-```bash
-./run.sh
-```
-
-or directly:
-
-```bash
-.venv/bin/python main.py
-```
-
-### Available options
-
-| Flag | Description |
-|---|---|
-| `--pay-tipo {C2C,PAY,ALL}` | Filter Pay transactions by order type. Default: `ALL`. |
-| `--debug` | Prints the raw JSON of the first Pay transactions (useful for inspecting fields like `binanceId`). |
-| `--debug-limit N` | Number of transactions to show in `--debug` mode. Default: `5`. |
-
-Examples:
 
 ```bash
 # Full report
 python main.py
 
 # C2C transactions only
-python main.py --pay-tipo C2C
+python main.py --pay-type C2C
 
 # Inspect the raw JSON of the first 10 transactions
 python main.py --debug --debug-limit 10
 ```
 
-## How to find someone's `binanceId` to exclude them
+**Linux / macOS shortcut:**
+```bash
+./run.sh
+```
 
-1. Run the program with `--debug`.
-2. Look in the printed JSON for the `payerInfo.binanceId` and `receiverInfo.binanceId` fields of the transaction you want to exclude.
-3. Add that number to `EXCLUDED_IDS` in your `.env`, comma-separated if there are multiple.
+### CLI flags
 
-## How monthly windowing works
+| Flag | Description |
+|---|---|
+| `--pay-type {C2C,PAY,ALL}` | Filter Pay transactions by order type. Default: `ALL`. |
+| `--debug` | Print raw JSON of the first N Pay transactions. |
+| `--debug-limit N` | Number of transactions to show in debug mode. Default: `5`. |
 
-Binance Pay's API returns a maximum of 100 results per call. To avoid silently missing transactions, this script splits the date range into **exact monthly windows** (from the 1st to the last day of each month) and queries each one separately. This is especially important for high-volume months — and the script will warn you if any window returns 100 results, since that may indicate the limit was hit.
+---
+
+## Finding a `binanceId` to exclude
+
+1. Run `python main.py --debug`
+2. Look for `payerInfo.binanceId` or `receiverInfo.binanceId` in the printed JSON
+3. Add the ID to `EXCLUDED_IDS` in your `.env`, comma-separated if multiple
+
+---
 
 ## Technical notes
 
-- `recvWindow=10000` is used to tolerate small clock differences between your machine and Binance's servers.
-- BEP20 **withdrawals** are not counted; only Binance Pay outgoing payments are subtracted, and BEP20 incoming deposits are added.
-
-## Project structure
-
-```
-binance-pay-history/
-├── main.py          # Main script
-├── requirements.txt # Python dependencies
-├── .env             # Credentials (not versioned)
-├── .gitignore
-├── run.sh           # Linux/macOS launcher
-└── README.md
-```
+- All timestamps are handled in **UTC**
+- `recvWindow=10000` tolerates minor clock drift between your machine and Binance's servers
+- BEP20 **withdrawals** are intentionally excluded — only incoming deposits are counted
+- The deposit endpoint uses `status=1` (confirmed only) to avoid counting pending transfers
