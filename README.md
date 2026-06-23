@@ -133,6 +133,8 @@ python main.py --debug --debug-limit 10
 ./run.sh
 ```
 
+> **Note:** if you get `Permission denied`, run `chmod +x run.sh` once to make the script executable.
+
 ### CLI flags
 
 | Flag | Description |
