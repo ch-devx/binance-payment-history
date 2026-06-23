@@ -18,6 +18,22 @@ Built to solve a practical accounting problem: Binance's own interface doesn't o
 
 ---
 
+## Scope & limitations
+
+- **USD-pegged assets only** — the tool assumes all tracked coins are stablecoins
+  (1:1 with USD). No price conversion is performed. If you add non-pegged assets
+  via `TRACKED_COINS`, the balance totals will be in mixed units and won't reflect
+  USD value accurately.
+- **Funding wallet only** — Pay transactions are fetched from `walletType=1`
+  (funding wallet). Spot or futures wallets are not included.
+- **BEP20 deposits only** — only BSC on-chain deposits are tracked.
+  Withdrawals are intentionally excluded (outflows via Pay are already captured).
+- **100-result cap per window** — the Pay API returns at most 100 results per
+  monthly window. The tool warns when this limit is reached, but does not
+  sub-paginate within a window. Very high-volume months may be incomplete.
+
+---
+
 ## How it works
 
 Binance's Pay API returns at most 100 results per request. Rather than paginating by offset (which the API doesn't support), this tool splits the full date range into **monthly windows** and queries each independently. This guarantees full coverage even for high-volume months.
@@ -87,11 +103,13 @@ API_SECRET=your_binance_api_secret
 EXCLUDED_IDS=123456789,987654321
 ```
 
-| Variable | Required | Description |
-|---|---|---|
-| `API_KEY` | Yes | Binance API key (read-only). |
-| `API_SECRET` | Yes | Corresponding API secret. |
-| `EXCLUDED_IDS` | No | Comma-separated list of `binanceId` values to exclude (e.g. personal contacts unrelated to business). |
+| Variable       | Required | Description                                                              |
+|----------------|----------|--------------------------------------------------------------------------|
+| `API_KEY`      | Yes      | Binance API key (read-only).                                             |
+| `API_SECRET`   | Yes      | Corresponding API secret.                                                |
+| `START_DATE`   | No       | Report start date in `YYYY-MM-DD` format. Default: `2025-12-01`.        |
+| `TRACKED_COINS`| No       | Comma-separated list of coins to track. Default: `USDC,USDT`.           |
+| `EXCLUDED_IDS` | No       | Comma-separated list of `binanceId` values to exclude from the report.  |
 
 > The `.env` file is included in `.gitignore` and should never be committed.
 
