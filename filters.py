@@ -14,7 +14,8 @@ load_dotenv()
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-STABLECOINS: set[str] = {"USDC", "USDT"}
+_raw_coins = os.getenv("TRACKED_COINS", "USDC,USDT")
+STABLECOINS: set[str] = {c.strip().upper() for c in _raw_coins.split(",") if c.strip()}
 START_DT: datetime = datetime(2025, 12, 1, tzinfo=timezone.utc)
 
 _raw_excluded = os.getenv("EXCLUDED_IDS", "")
