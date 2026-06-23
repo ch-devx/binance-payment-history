@@ -5,8 +5,8 @@ Binance API layer: HMAC signing, signed GET requests, monthly window
 pagination, and the two data-fetching functions (Pay + BEP20 deposits).
 
 Imports from filters.py:
-  - START_DT        → lower bound for iter_windows()
-  - is_valid_pay_tx → row-level filter applied after each Pay page
+  - START_DT         → lower bound for iter_windows()
+  - is_valid_pay_tx  → row-level filter applied after each Pay page
   - is_valid_deposit → row-level filter applied after each deposit page
 """
 
@@ -105,7 +105,7 @@ def fetch_all_pay() -> list[dict]:
     Positive amount  → received
     Negative amount  → sent
     """
-    all_tx: list[dict] = []
+    all_transactions: list[dict] = []
     for start_ms, end_ms, cursor, win_end in iter_windows():
         print(
             f"  [Pay]    {cursor.strftime('%Y-%m-%d')} -> {win_end.strftime('%Y-%m-%d')} ...",
@@ -120,14 +120,14 @@ def fetch_all_pay() -> list[dict]:
             raise RuntimeError(f"Pay API error: {body}")
         txs = body.get("data", []) if isinstance(body, dict) else []
         filtered = [tx for tx in txs if is_valid_pay_tx(tx)]
-        print(f"{len(txs)} totales, {len(filtered)} stablecoins")
+        print(f"{len(txs)} total, {len(filtered)} stablecoins")
         if len(txs) >= 100:
             print(
-                f"  ⚠️  Warning: ventana {cursor.strftime('%Y-%m')} devolvio "
-                f"{len(txs)} resultados — puede haberse alcanzado el limite."
+                f"  ⚠️  Warning: window {cursor.strftime('%Y-%m')} returned "
+                f"{len(txs)} results — the page limit may have been reached."
             )
-        all_tx.extend(filtered)
-    return all_tx
+        all_transactions.extend(filtered)
+    return all_transactions
 
 
 def fetch_all_deposits() -> list[dict]:
@@ -135,14 +135,14 @@ def fetch_all_deposits() -> list[dict]:
     Returns all completed BEP20 stablecoin deposits (status=1) across
     all monthly windows since START_DT.
     """
-    all_dep: list[dict] = []
+    all_deposits: list[dict] = []
     for start_ms, end_ms, cursor, win_end in iter_windows():
         print(
-            f"  [BEP20 deposito] {cursor.strftime('%Y-%m-%d')} -> {win_end.strftime('%Y-%m-%d')} ...",
+            f"  [BEP20 deposit] {cursor.strftime('%Y-%m-%d')} -> {win_end.strftime('%Y-%m-%d')} ...",
             end=" ",
             flush=True,
         )
-        deps = api_get(
+        deposits = api_get(
             "/sapi/v1/capital/deposit/hisrec",
             {
                 "network": "BSC",
@@ -152,7 +152,7 @@ def fetch_all_deposits() -> list[dict]:
                 "limit": 1000,
             },
         )
-        filtered = [d for d in deps if is_valid_deposit(d)]
-        print(f"{len(deps)} totales, {len(filtered)} stablecoins")
-        all_dep.extend(filtered)
-    return all_dep
+        filtered = [d for d in deposits if is_valid_deposit(d)]
+        print(f"{len(deposits)} total, {len(filtered)} stablecoins")
+        all_deposits.extend(filtered)
+    return all_deposits

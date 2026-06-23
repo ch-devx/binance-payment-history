@@ -21,7 +21,7 @@ from report import print_detail_table, print_header, print_monthly_balance
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _parse_ts(raw_ts: int | str) -> datetime:
+def _parse_timestamp(raw_ts: int | str) -> datetime:
     """Converts a millisecond or second UNIX timestamp to a UTC datetime."""
     raw_ts = int(raw_ts)
     if raw_ts > 1e12:
@@ -34,24 +34,24 @@ def _parse_ts(raw_ts: int | str) -> datetime:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Balance neto USDC/USDT: Pay + BEP20 (desde dic 2025)"
+        description="Net USDC/USDT balance: Binance Pay + BEP20 deposits (from Dec 2025)"
     )
     parser.add_argument(
-        "--pay-tipo",
+        "--pay-type",
         default="ALL",
-        help="Filtrar Pay por orderType: C2C, PAY, ALL (default: ALL)",
+        help="Filter Pay transactions by orderType: C2C, PAY, ALL (default: ALL)",
     )
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Imprime el JSON crudo de las transacciones Pay para inspeccionar campos",
+        help="Print the raw JSON of the first N Pay transactions to inspect available fields",
     )
     parser.add_argument(
         "--debug-limit",
         type=int,
         default=5,
         metavar="N",
-        help="Numero de transacciones a mostrar en modo --debug (default: 5)",
+        help="Number of transactions to show in --debug mode (default: 5)",
     )
     return parser
 
@@ -62,90 +62,89 @@ def _build_parser() -> argparse.ArgumentParser:
 def _run_debug(debug_limit: int) -> None:
     """Fetches Pay transactions and dumps the first N as raw JSON."""
     print(f"\n{'='*62}")
-    print(f"  MODO DEBUG — primeras {debug_limit} transacciones Pay (JSON crudo)")
+    print(f"  DEBUG MODE — first {debug_limit} Pay transactions (raw JSON)")
     print(f"{'='*62}\n")
-    print("Consultando Binance Pay...")
+    print("Querying Binance Pay...")
     pay_txs = fetch_all_pay()
-    muestra = pay_txs[:debug_limit]
-    if not muestra:
-        print("  No se encontraron transacciones Pay.")
-    for i, tx in enumerate(muestra, 1):
-        print(f"\n  ── Transaccion #{i} ──────────────────────────────────")
+    sample = pay_txs[:debug_limit]
+    if not sample:
+        print("  No Pay transactions found.")
+    for i, tx in enumerate(sample, 1):
+        print(f"\n  ── Transaction #{i} ──────────────────────────────────")
         print(json.dumps(tx, indent=4, ensure_ascii=False))
     print(f"\n{'='*62}")
-    print(f"  Total transacciones Pay encontradas: {len(pay_txs)}")
-    print(f"  (mostrando {len(muestra)} de {len(pay_txs)})")
+    print(f"  Total Pay transactions found: {len(pay_txs)}")
+    print(f"  (showing {len(sample)} of {len(pay_txs)})")
     print(f"{'='*62}\n")
 
 
-def _run_normal(pay_tipo: str) -> None:
+def _run_normal(pay_type: str) -> None:
     """Fetches all movements, applies filters, and prints the full report."""
     print_header(EXCLUDED_IDS, START_DT)
 
-    ingresos: list[dict] = []
-    egresos: list[dict] = []
+    income: list[dict] = []
+    expenses: list[dict] = []
 
     # ── 1. Binance Pay ────────────────────────────────────────────────────
-    print("Consultando Binance Pay...")
+    print("Querying Binance Pay...")
     pay_txs = fetch_all_pay()
 
-    excluidas_pay = 0
+    excluded_count = 0
     for tx in pay_txs:
         amount = float(tx.get("amount", 0))
         order_type = tx.get("orderType", "")
 
-        if pay_tipo != "ALL" and order_type != pay_tipo:
+        if pay_type != "ALL" and order_type != pay_type:
             continue
         if amount == 0:
             continue
         if order_type == "CRYPTO_BOX":
             continue
         if is_excluded(tx):
-            excluidas_pay += 1
+            excluded_count += 1
             continue
 
-        fecha_dt = _parse_ts(tx["transactionTime"])
-        registro = {
-            "fecha_dt": fecha_dt,
-            "tipo": f"Pay/{order_type}",
-            "moneda": tx.get("currency"),
-            "monto": abs(amount),
-            "fuente": "Pay",
+        record = {
+            "date": _parse_timestamp(tx["transactionTime"]),
+            "tx_type": f"Pay/{order_type}",
+            "currency": tx.get("currency"),
+            "amount": abs(amount),
+            "source": "Pay",
         }
         if amount > 0:
-            ingresos.append(registro)
+            income.append(record)
         else:
-            egresos.append(registro)
+            expenses.append(record)
 
-    if excluidas_pay:
-        print(f"  ({excluidas_pay} transacciones Pay omitidas por exclusion de ID)")
+    if excluded_count:
+        print(f"  ({excluded_count} Pay transactions skipped due to ID exclusion)")
 
     # ── 2. BEP20 Deposits ─────────────────────────────────────────────────
-    print("\nConsultando depositos BEP20...")
+    print("\nQuerying BEP20 deposits...")
     for dep in fetch_all_deposits():
         amount = float(dep.get("amount", 0))
         if amount <= 0:
             continue
-        ingresos.append(
+        income.append(
             {
-                "fecha_dt": _parse_ts(dep.get("insertTime", 0)),
-                "tipo": "Deposito/BEP20",
-                "moneda": dep.get("coin"),
-                "monto": amount,
-                "fuente": "BEP20",
+                "date": _parse_timestamp(dep.get("insertTime", 0)),
+                "tx_type": "Deposit/BEP20",
+                "currency": dep.get("coin"),
+                "amount": amount,
+                "source": "BEP20",
             }
         )
 
-    if not ingresos and not egresos:
-        print("\n  No se encontraron movimientos con esos filtros.")
+    if not income and not expenses:
+        print("\n  No movements found matching the current filters.")
         return
 
     # ── Sort & render ──────────────────────────────────────────────────────
-    ingresos.sort(key=lambda x: x["fecha_dt"])
-    egresos.sort(key=lambda x: x["fecha_dt"])
+    income.sort(key=lambda x: x["date"])
+    expenses.sort(key=lambda x: x["date"])
 
-    print_detail_table(ingresos, egresos)
-    print_monthly_balance(ingresos, egresos)
+    print_detail_table(income, expenses)
+    print_monthly_balance(income, expenses)
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -156,7 +155,7 @@ def main() -> None:
     if args.debug:
         _run_debug(args.debug_limit)
     else:
-        _run_normal(args.pay_tipo)
+        _run_normal(args.pay_type)
 
 
 if __name__ == "__main__":
