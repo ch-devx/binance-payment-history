@@ -17,7 +17,7 @@ load_dotenv()
 _raw_coins = os.getenv("TRACKED_COINS", "USDC,USDT")
 STABLECOINS: set[str] = {c.strip().upper() for c in _raw_coins.split(",") if c.strip()}
 
-_raw_start = os.getenv("START_DATE", "2025-12-01")
+_raw_start = os.getenv("START_DATE")
 try:
     START_DT: datetime = datetime.strptime(_raw_start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 except ValueError:

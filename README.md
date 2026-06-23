@@ -105,9 +105,9 @@ EXCLUDED_IDS=123456789,987654321
 |----------------|----------|--------------------------------------------------------------------------|
 | `API_KEY`      | Yes      | Binance API key (read-only).                                             |
 | `API_SECRET`   | Yes      | Corresponding API secret.                                                |
-| `START_DATE`   | No       | Report start date in `YYYY-MM-DD` format. Default: `2025-12-01`.        |
-| `TRACKED_COINS`| No       | Comma-separated list of coins to track. Default: `USDC,USDT`.           |
-| `EXCLUDED_IDS` | No       | Comma-separated list of `binanceId` values to exclude from the report.  |
+| `START_DATE`   | Yes      | Report start date in `YYYY-MM-DD` format.                                |
+| `TRACKED_COINS`| No       | Comma-separated list of coins to track. Default: `USDC,USDT`.            |
+| `EXCLUDED_IDS` | No       | Comma-separated list of `binanceId` values to exclude from the report.   |
 
 > The `.env` file is included in `.gitignore` and should never be committed.
 
