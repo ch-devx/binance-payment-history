@@ -1,30 +1,30 @@
-# Binance Pay History — Balance Neto en Stablecoins
+# Binance Pay History — Net Stablecoin Balance
 
-Script de línea de comandos que calcula el balance neto de pagos recibidos y enviados vía **Binance Pay**, sumando también los **depósitos recibidos por la red BEP20 (BSC)**. Solo contabiliza **USDC** y **USDT**, desde el **1 de diciembre de 2025**.
+A command-line script that calculates the net balance of payments received and sent via **Binance Pay**, also including **deposits received through the BEP20 network (BSC)**. Only accounts for **USDC** and **USDT**, starting from **December 1, 2025**.
 
-## ¿Qué hace?
+## What it does
 
-- Consulta el endpoint `/sapi/v1/pay/transactions` para obtener todos los pagos C2C recibidos y enviados por Binance Pay.
-- Consulta `/sapi/v1/capital/deposit/hisrec` para sumar los depósitos on-chain recibidos por la red BEP20.
-- Filtra automáticamente:
-  - Solo monedas **USDC** y **USDT**.
-  - Solo movimientos de la **funding wallet**.
-  - Excluye transacciones tipo `CRYPTO_BOX` (sobres rojos / recompensas).
-  - Permite excluir manualmente transacciones de IDs de Binance específicos (ej. pagos de amigos/conocidos no relacionados al negocio).
-- Genera un reporte con:
-  - Detalle cronológico de ingresos y egresos.
-  - Balance mensual (ingresos, egresos, neto por mes).
-  - Balance histórico total.
+- Queries the `/sapi/v1/pay/transactions` endpoint to fetch all C2C payments received and sent via Binance Pay.
+- Queries `/sapi/v1/capital/deposit/hisrec` to include on-chain deposits received through the BEP20 network.
+- Automatically filters:
+  - Only **USDC** and **USDT** currencies.
+  - Only movements from the **funding wallet**.
+  - Excludes `CRYPTO_BOX` transactions (red envelopes / rewards).
+  - Allows manually excluding transactions from specific Binance IDs (e.g. payments from friends or contacts unrelated to the business).
+- Generates a report with:
+  - Chronological breakdown of income and expenses.
+  - Monthly balance (income, expenses, and net per month).
+  - Full historical balance.
 
-## Requisitos
+## Requirements
 
 - Python 3.10+
-- Una API Key de Binance con permisos de lectura (no requiere permisos de trading ni retiro).
+- A Binance API Key with read permissions (no trading or withdrawal permissions required).
 
-## Instalación
+## Installation
 
-1. Clona o descarga este proyecto.
-2. Crea un entorno virtual e instala las dependencias:
+1. Clone or download this repository.
+2. Create a virtual environment and install dependencies:
 
    ```bash
    python -m venv .venv
@@ -33,40 +33,40 @@ Script de línea de comandos que calcula el balance neto de pagos recibidos y en
    **Windows:**
    ```bat
    .venv\Scripts\activate.bat
-   pip install requests python-dotenv
+   pip install -r requirements.txt
    ```
 
    **Linux / macOS:**
    ```bash
    source .venv/bin/activate
-   pip install requests python-dotenv
+   pip install -r requirements.txt
    ```
 
-3. Crea un archivo `.env` en la raíz del proyecto (ver sección siguiente).
+3. Create a `.env` file in the project root (see next section).
 
-## Configuración (`.env`)
+## Configuration (`.env`)
 
-Crea un archivo `.env` en el mismo directorio que `main.py`:
+Create a `.env` file in the same directory as `main.py`:
 
 ```env
-API_KEY=tu_api_key_de_binance
-API_SECRET=tu_api_secret_de_binance
+API_KEY=your_binance_api_key
+API_SECRET=your_binance_api_secret
 EXCLUDED_IDS=123456789,987654321
 ```
 
-| Variable | Obligatoria | Descripción |
+| Variable | Required | Description |
 |---|---|---|
-| `API_KEY` | Sí | API Key generada en Binance (solo lectura). |
-| `API_SECRET` | Sí | API Secret correspondiente. |
-| `EXCLUDED_IDS` | No | Lista de `binanceId` separados por coma a excluir del cálculo (ej. pagos de amigos o conocidos). |
+| `API_KEY` | Yes | API Key generated on Binance (read-only). |
+| `API_SECRET` | Yes | Corresponding API Secret. |
+| `EXCLUDED_IDS` | No | Comma-separated list of `binanceId` values to exclude from the calculation (e.g. payments from friends or personal contacts). |
 
-> ⚠️ El archivo `.env` nunca debe subirse a un repositorio. Ya está incluido en `.gitignore`.
+> ⚠️ The `.env` file should never be committed to a repository. It is already included in `.gitignore`.
 
-## Uso
+## Usage
 
 ### Windows
 
-Doble clic en `run.bat`, o desde terminal:
+Double-click `run.bat`, or from a terminal:
 
 ```bat
 .venv\Scripts\python.exe main.py
@@ -78,53 +78,56 @@ Doble clic en `run.bat`, o desde terminal:
 ./run.sh
 ```
 
-o directamente:
+or directly:
 
 ```bash
 .venv/bin/python main.py
 ```
 
-### Opciones disponibles
+### Available options
 
-| Flag | Descripción |
+| Flag | Description |
 |---|---|
-| `--pay-tipo {C2C,PAY,ALL}` | Filtra las transacciones Pay por tipo de orden. Default: `ALL`. |
-| `--debug` | Imprime el JSON crudo de las primeras transacciones Pay (útil para inspeccionar campos como `binanceId`). |
-| `--debug-limit N` | Cantidad de transacciones a mostrar en modo `--debug`. Default: `5`. |
+| `--pay-tipo {C2C,PAY,ALL}` | Filter Pay transactions by order type. Default: `ALL`. |
+| `--debug` | Prints the raw JSON of the first Pay transactions (useful for inspecting fields like `binanceId`). |
+| `--debug-limit N` | Number of transactions to show in `--debug` mode. Default: `5`. |
 
-Ejemplos:
+Examples:
 
 ```bash
-# Reporte completo normal
+# Full report
 python main.py
 
-# Solo transacciones C2C
+# C2C transactions only
 python main.py --pay-tipo C2C
 
-# Inspeccionar el JSON crudo de las primeras 10 transacciones
+# Inspect the raw JSON of the first 10 transactions
 python main.py --debug --debug-limit 10
 ```
 
-## Cómo obtener el `binanceId` de alguien para excluirlo
+## How to find someone's `binanceId` to exclude them
 
-1. Corre el programa con `--debug`.
-2. Busca en el JSON impreso los campos `payerInfo.binanceId` y `receiverInfo.binanceId` de la transacción correspondiente a esa persona.
-3. Agrega ese número a `EXCLUDED_IDS` en el `.env`, separado por coma si hay varios.
+1. Run the program with `--debug`.
+2. Look in the printed JSON for the `payerInfo.binanceId` and `receiverInfo.binanceId` fields of the transaction you want to exclude.
+3. Add that number to `EXCLUDED_IDS` in your `.env`, comma-separated if there are multiple.
 
-## Notas técnicas
+## How monthly windowing works
 
-- Las consultas se hacen en **ventanas mensuales exactas** (del día 1 al último día de cada mes) para no exceder el límite de 100 resultados por llamada de la API de Binance Pay.
-- Se usa `recvWindow=10000` para tolerar pequeñas diferencias de reloj entre tu equipo y los servidores de Binance.
-- Los montos de retiros BEP20 **no** se contabilizan; solo se restan los pagos enviados vía Binance Pay y se suman los depósitos BEP20 recibidos.
+Binance Pay's API returns a maximum of 100 results per call. To avoid silently missing transactions, this script splits the date range into **exact monthly windows** (from the 1st to the last day of each month) and queries each one separately. This is especially important for high-volume months — and the script will warn you if any window returns 100 results, since that may indicate the limit was hit.
 
-## Estructura del proyecto
+## Technical notes
+
+- `recvWindow=10000` is used to tolerate small clock differences between your machine and Binance's servers.
+- BEP20 **withdrawals** are not counted; only Binance Pay outgoing payments are subtracted, and BEP20 incoming deposits are added.
+
+## Project structure
 
 ```
-binance_payment_history/
-├── main.py          # Script principal
-├── .env             # Credenciales (no versionado)
+binance-pay-history/
+├── main.py          # Main script
+├── requirements.txt # Python dependencies
+├── .env             # Credentials (not versioned)
 ├── .gitignore
-├── run.bat          # Lanzador para Windows
-├── run.sh           # Lanzador para Linux/macOS
+├── run.sh           # Linux/macOS launcher
 └── README.md
 ```
