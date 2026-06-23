@@ -14,7 +14,7 @@ import argparse
 import json
 from datetime import datetime, timezone
 
-from api import fetch_all_deposits, fetch_all_pay
+from api import fetch_all_deposits, fetch_all_pay, fetch_all_withdrawals
 from filters import EXCLUDED_IDS, START_DT, is_excluded
 from report import print_detail_table, print_header, print_monthly_balance
 
@@ -141,6 +141,22 @@ def _run_normal(pay_type: str) -> None:
                 "source": "BEP20",
             }
         )
+
+    # ── 3. BEP20 Withdrawals ──────────────────────────────────────────────
+        print("\nQuerying BEP20 withdrawals...")
+        for w in fetch_all_withdrawals():
+            amount = float(w.get("amount", 0))
+            if amount <= 0:
+                continue
+            expenses.append(
+                {
+                    "date": _parse_timestamp(w.get("applyTime", 0)),
+                    "tx_type": "Withdraw/BEP20",
+                    "currency": w.get("coin"),
+                    "amount": amount,
+                    "source": "BEP20",
+                }
+            )
 
     if not income and not expenses:
         print("\n  No movements found matching the current filters.")

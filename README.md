@@ -157,5 +157,5 @@ python main.py --debug --debug-limit 10
 
 - All timestamps are handled in **UTC**
 - `recvWindow=10000` tolerates minor clock drift between your machine and Binance's servers
-- BEP20 **withdrawals** are intentionally excluded — only incoming deposits are counted
+- BEP20 **withdrawals** use `status=6` (completed); **deposits** use `status=1` (confirmed) — pending transfers are excluded in both cases
 - The deposit endpoint uses `status=1` (confirmed only) to avoid counting pending transfers

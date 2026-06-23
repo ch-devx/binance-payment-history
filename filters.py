@@ -53,3 +53,7 @@ def is_valid_pay_tx(tx: dict) -> bool:
 def is_valid_deposit(dep: dict) -> bool:
     """Returns True if the deposit coin is a tracked stablecoin."""
     return dep.get("coin") in STABLECOINS
+
+def is_valid_withdrawal(w: dict) -> bool:
+    """Returns True if the withdrawal coin is a tracked stablecoin."""
+    return w.get("coin") in STABLECOINS

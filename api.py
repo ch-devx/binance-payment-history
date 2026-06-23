@@ -21,7 +21,7 @@ from urllib.parse import urlencode
 import requests
 from dotenv import load_dotenv
 
-from filters import START_DT, is_valid_deposit, is_valid_pay_tx
+from filters import START_DT, is_valid_deposit, is_valid_pay_tx, is_valid_withdrawal
 
 # ── Credentials ───────────────────────────────────────────────────────────────
 
@@ -156,3 +156,30 @@ def fetch_all_deposits() -> list[dict]:
         print(f"{len(deposits)} total, {len(filtered)} stablecoins")
         all_deposits.extend(filtered)
     return all_deposits
+
+def fetch_all_withdrawals() -> list[dict]:
+    """
+    Returns all completed BEP20 stablecoin withdrawals (status=6) across
+    all monthly windows since START_DT.
+    """
+    all_withdrawals: list[dict] = []
+    for start_ms, end_ms, cursor, win_end in iter_windows():
+        print(
+            f"  [BEP20 withdraw] {cursor.strftime('%Y-%m-%d')} -> {win_end.strftime('%Y-%m-%d')} ...",
+            end=" ",
+            flush=True,
+        )
+        withdrawals = api_get(
+            "/sapi/v1/capital/withdraw/history",
+            {
+                "network": "BSC",
+                "status": 6,
+                "startTime": start_ms,
+                "endTime": end_ms,
+                "limit": 1000,
+            },
+        )
+        filtered = [w for w in withdrawals if is_valid_withdrawal(w)]
+        print(f"{len(withdrawals)} total, {len(filtered)} stablecoins")
+        all_withdrawals.extend(filtered)
+    return all_withdrawals
