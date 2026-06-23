@@ -53,6 +53,13 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="N",
         help="Number of transactions to show in --debug mode (default: 5)",
     )
+    parser.add_argument(
+        "--from",
+        dest="start_date",
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Override the start date for the report (default: START_DATE from .env or 2025-12-01)",
+    )
     return parser
 
 
@@ -152,6 +159,14 @@ def _run_normal(pay_type: str) -> None:
 
 def main() -> None:
     args = _build_parser().parse_args()
+
+    if args.start_date:
+        import filters
+        try:
+            filters.START_DT = datetime.strptime(args.start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise SystemExit(f"Error: --from '{args.start_date}' is not a valid date (expected YYYY-MM-DD).")
+
     if args.debug:
         _run_debug(args.debug_limit)
     else:

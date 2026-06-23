@@ -16,7 +16,12 @@ load_dotenv()
 
 _raw_coins = os.getenv("TRACKED_COINS", "USDC,USDT")
 STABLECOINS: set[str] = {c.strip().upper() for c in _raw_coins.split(",") if c.strip()}
-START_DT: datetime = datetime(2025, 12, 1, tzinfo=timezone.utc)
+
+_raw_start = os.getenv("START_DATE", "2025-12-01")
+try:
+    START_DT: datetime = datetime.strptime(_raw_start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+except ValueError:
+    raise SystemExit(f"Error: START_DATE '{_raw_start}' is not a valid date (expected YYYY-MM-DD).")
 
 _raw_excluded = os.getenv("EXCLUDED_IDS", "")
 EXCLUDED_IDS: set[str] = {uid.strip() for uid in _raw_excluded.split(",") if uid.strip()}
