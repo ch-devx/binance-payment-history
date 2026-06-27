@@ -98,6 +98,8 @@ Create a `.env` file in the project root:
 ```env
 API_KEY=your_binance_api_key
 API_SECRET=your_binance_api_secret
+START_DATE=2025-01-01
+TRACKED_COINS=USDC,USDT
 EXCLUDED_IDS=123456789,987654321
 ```
 
@@ -140,6 +142,7 @@ python main.py --debug --debug-limit 10
 | `--pay-type {C2C,PAY,ALL}` | Filter Pay transactions by order type. Default: `ALL`. |
 | `--debug` | Print raw JSON of the first N Pay transactions. |
 | `--debug-limit N` | Number of transactions to show in debug mode. Default: `5`. |
+| `--from YYYY-MM-DD` | Override the report start date for this run (overrides `START_DATE` from `.env`). |
 
 ---
 
