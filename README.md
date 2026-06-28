@@ -1,6 +1,6 @@
 # binance-pay-history
 
-A lightweight CLI tool that calculates a net stablecoin balance across **Binance Pay transactions** and **BEP20 on-chain deposits**, producing a clean chronological report with monthly breakdowns.
+A lightweight CLI tool that calculates a net stablecoin balance across **Binance Pay transactions**, **BEP20 on-chain deposits**, and **BEP20 withdrawals**, producing a clean chronological report with monthly breakdowns.
 
 Built to solve a practical accounting problem: Binance's own interface doesn't offer a unified view of Pay + on-chain inflows in one place, and its API caps results at 100 per call — silently dropping older data if you query naively.
 
@@ -10,7 +10,8 @@ Built to solve a practical accounting problem: Binance's own interface doesn't o
 
 - Fetches all **Binance Pay** C2C/P2P transactions (sent and received) from the funding wallet
 - Fetches all **BEP20 network deposits** (BSC) confirmed on-chain
-- Tracks **USDC and USDT** only — ignores spot, futures, and other assets
+- Fetches all **BEP20 network withdrawals** (BSC) completed on-chain
+- Tracks **USDC and USDT** by default — ignores spot, futures, and other assets
 - Handles **API pagination** by splitting the date range into exact monthly windows, preventing silent data loss
 - Warns when a window hits the 100-result cap
 - Supports **ID-based exclusion** to filter out personal or non-business payments
@@ -20,15 +21,9 @@ Built to solve a practical accounting problem: Binance's own interface doesn't o
 
 ## Scope & limitations
 
-- **USD-pegged assets only** — the tool assumes all tracked coins are stablecoins
-  (1:1 with USD). No price conversion is performed. If you add non-pegged assets
-  via `TRACKED_COINS`, the balance totals will be in mixed units and won't reflect
-  USD value accurately.
-- **Funding wallet only** — Pay transactions are fetched from `walletType=1`
-  (funding wallet). Spot or futures wallets are not included.
-- **100-result cap per window** — the Pay API returns at most 100 results per
-  monthly window. The tool warns when this limit is reached, but does not
-  sub-paginate within a window. Very high-volume months may be incomplete.
+- **USD-pegged assets only** — the tool assumes all tracked coins are stablecoins (1:1 with USD). No price conversion is performed. If you add non-pegged assets via `TRACKED_COINS`, the balance totals will be in mixed units and won't reflect USD value accurately.
+- **Funding wallet only** — Pay transactions are fetched from `walletType=1` (funding wallet). Spot or futures wallets are not included.
+- **100-result cap per window** — the Pay API returns at most 100 results per monthly window. The tool warns when this limit is reached, but does not sub-paginate within a window. Very high-volume months may be incomplete.
 
 ---
 
@@ -50,14 +45,15 @@ Each window result is filtered immediately (`filters.py`) before being accumulat
 
 ```
 binance-pay-history/
-├── main.py          # CLI entry point and orchestration
-├── api.py           # Binance API layer: signing, requests, pagination
-├── filters.py       # Constants and filtering predicates
-├── report.py        # Terminal output: tables and monthly summary
+├── main.py           # CLI entry point and orchestration
+├── api.py            # Binance API layer: signing, requests, pagination
+├── filters.py        # Constants and filtering predicates
+├── report.py         # Terminal output: tables and monthly summary
+├── test_filters.py   # Unit tests for filters.py (pytest)
 ├── requirements.txt
-├── .env             # Credentials — not versioned
+├── .env.example      # Environment variable template
 ├── .gitignore
-└── run.sh           # Linux/macOS launcher
+└── run.sh            # Linux/macOS launcher
 ```
 
 ---
@@ -93,7 +89,11 @@ pip install -r requirements.txt
 
 ## Configuration
 
-Create a `.env` file in the project root:
+Copy `.env.example` to `.env` and fill in your values:
+
+```bash
+cp .env.example .env
+```
 
 ```env
 API_KEY=your_binance_api_key
@@ -103,13 +103,13 @@ TRACKED_COINS=USDC,USDT
 EXCLUDED_IDS=123456789,987654321
 ```
 
-| Variable       | Required | Description                                                              |
-|----------------|----------|--------------------------------------------------------------------------|
-| `API_KEY`      | Yes      | Binance API key (read-only).                                             |
-| `API_SECRET`   | Yes      | Corresponding API secret.                                                |
-| `START_DATE`   | Yes      | Report start date in `YYYY-MM-DD` format.                                |
-| `TRACKED_COINS`| No       | Comma-separated list of coins to track. Default: `USDC,USDT`.            |
-| `EXCLUDED_IDS` | No       | Comma-separated list of `binanceId` values to exclude from the report.   |
+| Variable        | Required | Description                                                              |
+|-----------------|----------|--------------------------------------------------------------------------|
+| `API_KEY`       | Yes      | Binance API key (read-only).                                             |
+| `API_SECRET`    | Yes      | Corresponding API secret.                                                |
+| `START_DATE`    | Yes      | Report start date in `YYYY-MM-DD` format.                                |
+| `TRACKED_COINS` | No       | Comma-separated list of coins to track. Default: `USDC,USDT`.           |
+| `EXCLUDED_IDS`  | No       | Comma-separated list of `binanceId` values to exclude from the report.  |
 
 > The `.env` file is included in `.gitignore` and should never be committed.
 
@@ -124,7 +124,10 @@ python main.py
 # C2C transactions only
 python main.py --pay-type C2C
 
-# Inspect the raw JSON of the first 10 transactions
+# Override start date for this run
+python main.py --from 2025-06-01
+
+# Inspect the raw JSON of the first 10 Pay transactions
 python main.py --debug --debug-limit 10
 ```
 
@@ -137,12 +140,20 @@ python main.py --debug --debug-limit 10
 
 ### CLI flags
 
-| Flag | Description |
-|---|---|
-| `--pay-type {C2C,PAY,ALL}` | Filter Pay transactions by order type. Default: `ALL`. |
-| `--debug` | Print raw JSON of the first N Pay transactions. |
-| `--debug-limit N` | Number of transactions to show in debug mode. Default: `5`. |
-| `--from YYYY-MM-DD` | Override the report start date for this run (overrides `START_DATE` from `.env`). |
+| Flag                        | Description                                                                        |
+|-----------------------------|------------------------------------------------------------------------------------|
+| `--pay-type {C2C,PAY,ALL}`  | Filter Pay transactions by order type. Default: `ALL`.                             |
+| `--debug`                   | Print raw JSON of the first N Pay transactions.                                    |
+| `--debug-limit N`           | Number of transactions to show in debug mode. Default: `5`.                        |
+| `--from YYYY-MM-DD`         | Override the report start date for this run (overrides `START_DATE` from `.env`).  |
+
+---
+
+## Running tests
+
+```bash
+pytest test_filters.py -v
+```
 
 ---
 
@@ -159,4 +170,3 @@ python main.py --debug --debug-limit 10
 - All timestamps are handled in **UTC**
 - `recvWindow=10000` tolerates minor clock drift between your machine and Binance's servers
 - BEP20 **withdrawals** use `status=6` (completed); **deposits** use `status=1` (confirmed) — pending transfers are excluded in both cases
-- The deposit endpoint uses `status=1` (confirmed only) to avoid counting pending transfers
