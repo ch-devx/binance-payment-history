@@ -22,7 +22,12 @@ from report import print_detail_table, print_header, print_monthly_balance
 
 
 def _parse_timestamp(raw_ts: int | str) -> datetime:
-    """Converts a millisecond or second UNIX timestamp to a UTC datetime."""
+    """Converts a UNIX timestamp or API date string to a UTC datetime."""
+    if isinstance(raw_ts, str) and "-" in raw_ts:
+        return datetime.strptime(
+            raw_ts, "%Y-%m-%d %H:%M:%S"
+        ).replace(tzinfo=timezone.utc)
+
     raw_ts = int(raw_ts)
     if raw_ts > 1e12:
         return datetime.fromtimestamp(raw_ts / 1000, tz=timezone.utc)
